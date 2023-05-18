@@ -1,38 +1,35 @@
 require("dotenv").config();
 //* dependencies
+const log = require("debug")("holidays:server");
 const cors = require("cors");
 const express = require("express");
 const morgan = require("morgan");
-const log = require("debug")("holidays:server");
+const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const Country = require("./models/Country");
 const Holiday = require("./models/Holiday");
-const User = require("./models/User");
-const jwt = require("jsonwebtoken");
-// const { reset } = require("nodemon");
 
 //* configuration
 const PORT = process.env.PORT ?? 3000;
 const SECRET = process.env.SECRET ?? "mysecret";
-const MONGO_URI =
-  process.env.MONGO_URI ??
-  "mongodb+srv://JustenMX:YwjyvoCTcsZQbonS@clusterjustenmx.qnlvw4g.mongodb.net/test";
+const MONGO_URI = process.env.MONGO_URI ?? "mongodb://localhost:27017/holidays";
 const app = express();
 
 mongoose.connect(MONGO_URI);
 mongoose.connection.on("error", (err) =>
-  console.log(err.message + " is Mongod not running?")
+  log(err.message + " is Mongod not running?")
 );
-mongoose.connection.on("disconnected", () => console.log("mongo disconnected"));
+mongoose.connection.on("disconnected", () => log("mongo disconnected"));
 mongoose.connection.once("open", () => {
-  console.log("connected to mongoose...");
+  log("connected to mongoose...");
 });
 
 app.use(morgan("dev"));
+app.use(express.json());
 app.use(cors());
 
 app.get("/", (req, res) => {
-  res.send({ msg: "Holidays" });
+  res.json({ msg: "Holidays" });
 });
 
 //* Create route for Holidays
@@ -45,18 +42,18 @@ app.post("/holidays", async (req, res) => {
   log("results:%d after searching %o", result.length, title);
 
   if (result.length > 0) {
+    log("sending too many message");
     res.json({ msg: "Too many" });
   } else {
     Holiday.create(newHoliday, (error, holiday) => {
-      res.json(holiday);
+      res.json({ msg: "ok", data: holiday });
     });
   }
 });
 
-//* Users
 app.post("/login", (req, res) => {
   if (req.body.username === "admin") {
-    const payload = { name: "Justen" };
+    const payload = { name: "simon" };
     const token = jwt.sign(payload, SECRET);
     res.json({ token, msg: "Ok" });
   } else {
@@ -64,17 +61,29 @@ app.post("/login", (req, res) => {
   }
 });
 
-//* Seeding Countries
+app.get("/holidays", async (req, res) => {
+  const holidays = await Holiday.find();
+  res.json(holidays);
+});
+
+app.delete("/holidays/:id", async (req, res) => {
+  const { id } = req.params;
+  const holiday = await Holiday.findByIdAndDelete(id);
+  // res.send(holiday.lean());
+  res.json(holiday);
+});
+
 app.get("/countries/seed", async (req, res) => {
   const countries = [
-    { title: "Singapore", region: "Asia" },
-    { title: "Italy", region: "Europe" },
-    { title: "Thailand", region: "Asia" },
-    { title: "Malaysia", region: "Asia" },
-    { title: "United Kingdom", region: "Europe" },
+    { title: "Singapore" },
+    { title: "Italy" },
+    { title: "Thailand" },
   ];
+
   await Country.deleteMany({});
+
   const result = await Country.insertMany(countries);
+
   res.json(result);
 });
 
@@ -84,7 +93,6 @@ app.get("/countries", async (req, res) => {
   res.json(countries);
 });
 
-//* Port Listener
-app.listen(PORT, () => {
-  console.log(`Express listing on ${PORT}`);
+app.listen(PORT, "0.0.0.0", () => {
+  log(`Express listing on ${PORT}`);
 });
